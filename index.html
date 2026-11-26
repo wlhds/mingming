@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手势控制圣诞树</title>
+<!-- 使用国内可访问镜像CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1640029074/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;height:100vh}
+#canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+#video{position:fixed;bottom:10px;right:10px;width:180px;transform:scaleX(-1);opacity:0.7}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<video id="video" autoplay playsinline></video>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+resize();
+window.addEventListener('resize',resize);
+
+let treeScale = 1;
+
+const Hands = new Hands({
+  locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+Hands.setOptions({
+  maxNumHands:1,
+  modelComplexity:1,
+  minDetectionConfidence:0.7,
+  minTrackingConfidence:0.5
+});
+Hands.onResults(results=>{
+  if(results.multiHandLandmarks?.length){
+    const landmarks = results.multiHandLandmarks[0];
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    // 计算拇指和食指距离
+    const distance = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+    treeScale = Math.max(0.4, Math.min(1.8, 1.2 - distance * 2));
+  }
+});
+
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await Hands.send({image: video});
+  },
+  width:640,
+  height:480
+});
+camera.start();
+
+function drawStar(cx,cy,r1,r2,pointNum){
+  ctx.beginPath();
+  for(let i=0;i<2*pointNum;i++){
+    const angle = Math.PI * i / pointNum - Math.PI / 2;
+    const r = i % 2 ? r1 : r2;
+    const x = cx + Math.cos(angle)*r;
+    const y = cy + Math.sin(angle)*r;
+    i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawTree(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height * 0.55);
+  ctx.scale(treeScale, treeScale);
+  // 树干
+  ctx.fillStyle='#6b4423';
+  ctx.fillRect(-25,120,50,80);
+  // 三层树冠
+  const greenList = ['#009933','#00aa44','#00bb55'];
+  for(let i=0;i<3;i++){
+    ctx.beginPath();
+    ctx.fillStyle = greenList[i];
+    ctx.moveTo(0,-140 + i*70);
+    ctx.lineTo(-90 + i*25, -20 + i*70);
+    ctx.lineTo(90 - i*25, -20 + i*70);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // 顶部星星
+  ctx.fillStyle='#ffdd00';
+  drawStar(0,-150,18,40,5);
+  ctx.restore();
+}
+
+function animate(){
+  drawTree();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
